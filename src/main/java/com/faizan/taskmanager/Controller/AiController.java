@@ -3,7 +3,9 @@ package com.faizan.taskmanager.Controller;
 
 import com.faizan.taskmanager.Dto.EmbeddingRequest;
 import com.faizan.taskmanager.Service.EmbeddingService;
+import com.faizan.taskmanager.Service.QueryRouterService;
 import com.faizan.taskmanager.Service.TaskQueryService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,13 +13,17 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/ai")
+@RequiredArgsConstructor
 public class AiController {
 
-    @Autowired
-    private EmbeddingService embeddingService;
+    private final EmbeddingService embeddingService;
 
-    @Autowired
-    private TaskQueryService taskQueryService;
+    //might need later
+//    private final TaskQueryService taskQueryService;
+
+    private final QueryRouterService queryRouterService;
+
+
 
 
     @GetMapping("/embed")
@@ -26,8 +32,8 @@ public class AiController {
     }
 
     @GetMapping("/query")
-    public String query(@RequestParam String q){
-        return taskQueryService.answerQuery(q);
+    public String query(@RequestParam String q) throws InterruptedException {
+        return queryRouterService.route(q);
     }
 
 }
