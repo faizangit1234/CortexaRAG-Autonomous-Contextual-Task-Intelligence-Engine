@@ -21,7 +21,10 @@ public class ResponseValidatorServiceImpl implements ResponseValidatorService {
             return "INSUFFICIENT_CONTEXT";
         }
 
-        List<String> candidates = extractDescriptions(retrievedEntries);
+        List<String> candidates = extractDescriptions(retrievedEntries)
+                .stream()
+                .distinct()
+                .toList();
 
         String cleaned = normalize(llmOutput);
 
@@ -86,7 +89,12 @@ public class ResponseValidatorServiceImpl implements ResponseValidatorService {
             Set<String> intersection = new HashSet<>(outputTokens);
             intersection.retainAll(candidateTokens);
 
-            double score = (double) intersection.size() / candidateTokens.size();
+            Set<String> union = new HashSet<>(outputTokens);
+            union.addAll(candidateTokens);
+
+            if (union.isEmpty()) continue;
+
+            double score = (double) intersection.size() / union.size();
 
             if (score > bestScore) {
                 bestScore = score;

@@ -67,6 +67,12 @@ public class KnowledgeQueryService {
                 return cached.get();
             }
 
+            Optional<String> pending = cacheService.get("pending:" + normalizedQuery);
+            if (pending.isPresent()) {
+                log.info("PENDING CACHE HIT INSIDE LOCK");
+                return pending.get(); // return fast response
+            }
+
             log.info("CACHE MISS → processing");
 
             // EMBEDDING
@@ -79,10 +85,11 @@ public class KnowledgeQueryService {
 
             //Handle empty results + enqueue (dedup not yet)
             if (results.isEmpty()) {
-                log.info("NO RESULTS → enqueue for enrichment");
+                // commented
+//                enqueueIfNeeded(normalizedQuery, List.of());
+                log.warn("No context → marking as insufficient: {}", query);
 
-                queueService.enqueue(normalizedQuery, List.of());
-
+                cacheService.put(normalizedQuery, "INSUFFICIENT_CONTEXT");
                 return "INSUFFICIENT_CONTEXT";
             }
 
@@ -98,8 +105,8 @@ public class KnowledgeQueryService {
             // Deduplicate enqueue using Redis key
             String queueKey = "queued:" + normalizedQuery;
 
-            Boolean shouldEnqueue = redisTemplate.opsForValue()
-                    .setIfAbsent(queueKey, "1", Duration.ofMinutes(5));
+//            Boolean shouldEnqueue = redisTemplate.opsForValue()
+//                    .setIfAbsent(queueKey, "1", Duration.ofMinutes(5));
 
             // DECISION
             switch (level) {
@@ -110,23 +117,21 @@ public class KnowledgeQueryService {
                 }
 
                 case MEDIUM -> {
-                    if (Boolean.TRUE.equals(shouldEnqueue)) {
-                        queueService.enqueue(normalizedQuery, results);
-                    }
-                    cacheService.put(normalizedQuery, response);
+                    enqueueIfNeeded(normalizedQuery, results);
+                    cacheService.put("pending:" + normalizedQuery, response);
+//                    cacheService.put(normalizedQuery, response);
                     return response;
                 }
 
                 case LOW -> {
-                    if (Boolean.TRUE.equals(shouldEnqueue)) {
-                        queueService.enqueue(normalizedQuery, results);
-                    }
+                    enqueueIfNeeded(normalizedQuery, results);
 
                     log.warn("LOW confidence → returning fallback result");
 
                     String finalResponse = "[LOW_CONFIDENCE] " + response;
 
-                    cacheService.put(normalizedQuery, finalResponse);
+                    cacheService.put("pending:" + normalizedQuery, response);
+//                    cacheService.put(normalizedQuery, finalResponse);
 
                     return finalResponse;
                 }
@@ -141,4 +146,18 @@ public class KnowledgeQueryService {
             redisTemplate.delete(lockKey);
         }
     }
+private void enqueueIfNeeded(String query, List<ScoredEntry> results) {
+    String queueKey = "queued:" + query;
+
+    Boolean shouldEnqueue = redisTemplate.opsForValue()
+            .setIfAbsent(queueKey, "1", Duration.ofMinutes(5));
+
+    if (Boolean.TRUE.equals(shouldEnqueue)) {
+        log.info("ENQUEUE → {}", query);
+        queueService.enqueue(query, results);
+    } else {
+        log.info("SKIP ENQUEUE (DEDUP) → {}", query);
+    }
 }
+}
+

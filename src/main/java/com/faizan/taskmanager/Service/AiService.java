@@ -79,6 +79,7 @@ public class AiService {
         return cleanResponse(raw);
     }
 
+    // old one when enrichment prompt was not generated and we used llm synchronoulsy
     private String buildRagPrompt(String query, String context) {
         return """
     You MUST select the most relevant task from the context.
@@ -104,8 +105,38 @@ public class AiService {
     """.formatted(context, query);
     }
 
+    private String buildEnrichmentPrompt(String query, String context) {
+        return """
+You are a system that improves existing task descriptions.
+
+GOAL:
+Enhance the quality of the provided task descriptions.
+
+STRICT RULES:
+- You MUST use only the given context
+- You MUST NOT invent new tasks
+- You MUST NOT change the core meaning
+- Improve clarity, detail, and completeness
+- Keep it concise and technical
+- Output ONLY the improved task description
+
+If context is empty, output EXACTLY:
+INSUFFICIENT_CONTEXT
+
+---------------------
+CONTEXT:
+%s
+---------------------
+
+QUERY:
+%s
+
+OUTPUT:
+""".formatted(context, query);
+    }
+
     public String generateWithContext(String query, String context){
-        String prompt = buildRagPrompt(query, context);
+        String prompt = buildEnrichmentPrompt(query, context);
         // 🔥 DEBUG (VERY IMPORTANT)
         System.out.println("=== FINAL PROMPT SENT TO AI ===");
         System.out.println(prompt);

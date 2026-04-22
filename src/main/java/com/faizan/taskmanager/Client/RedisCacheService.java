@@ -32,4 +32,9 @@ public class RedisCacheService implements CacheService{
         );
 
     }
+
+    @Override
+    public void delete(String key) {
+        stringRedisTemplate.delete(normalize(key));
+    }
 }
